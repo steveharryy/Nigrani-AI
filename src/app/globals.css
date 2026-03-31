@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-inter: var(--font-inter);
+  --font-heading: var(--font-josefin-sans);
+
+  --color-primary: #00FF00;
+  --color-secondary: #06b6d4;
+  --color-accent: #f43f5e;
+  --color-safe: #22c55e;
+  --color-suspicious: #eab308;
+  --color-fraud: #ef4444;
+  
+  --background: #000000;
+  --foreground: #ffffff;
+}
+
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter);
+}
+
+@utility nitro-grid {
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: calc(100% / 6) 100%;
+}
+
+@utility glass {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility glass-dark {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+@utility text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500;
+}
+
+@utility bg-gradient-primary {
+  @apply bg-[#00FF00];
+}
+
+@utility glow-neon {
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-josefin-sans);
+  letter-spacing: -0.05em;
+  text-transform: lowercase;
+}
