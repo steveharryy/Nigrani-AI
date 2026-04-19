@@ -1,15 +1,14 @@
 {
-  "version": 2,
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index.py"
+  "experimentalServices": {
+    "frontend": {
+      "entrypoint": "./",
+      "routePrefix": "/",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/api",
+      "framework": "fastapi"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/api",
-      "destination": "/api/index.py"
-    }
-  ]
+  }
 }
