@@ -34,10 +34,11 @@ export default function AnalyzePage() {
     setAnalyzing(true);
     setResult(null);
     setExplanation("");
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
     
     try {
       // 1. Call Prediction API
-      const predictRes = await fetch("/api/predict", {
+      const predictRes = await fetch(`${API_URL}/api/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -55,8 +56,11 @@ export default function AnalyzePage() {
       const predictData = await predictRes.json();
       setResult(predictData);
 
-      // 2. Call Explanation API (immediately after)
-      const explainRes = await fetch("/api/explain", {
+      // 2. Call History API (Optional: to log it)
+      await fetch(`${API_URL}/api/history/demo-user`);
+
+      // 3. Call Explanation API (immediately after)
+      const explainRes = await fetch(`${API_URL}/api/explain`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
