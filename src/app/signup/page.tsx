@@ -6,6 +6,7 @@ import { ShieldCheck, Mail, Lock, ArrowRight, User, Building, Globe as GlobeIcon
 import { Button } from "@/components/ui/Button";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function SignupPage() {
     password: ""
   });
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.org || !formData.email || !formData.password) {
       toast.error("Please fill in all requested fields");
@@ -25,13 +26,37 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    toast.loading("Registering organization with Nigrani AI...");
+    const loadingToast = toast.loading("Registering organization with Nigrani AI...");
 
-    setTimeout(() => {
-      toast.dismiss();
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.name,
+            organization: formData.org,
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      toast.dismiss(loadingToast);
       toast.success(`Account created for ${formData.org}. Welcome, ${formData.name.split(' ')[0]}!`);
-      router.push("/dashboard");
-    }, 2500);
+      
+      // If email confirmation is off, redirect immediately
+      if (data.user) {
+        router.push("/dashboard");
+      } else {
+        toast.info("Please check your email to confirm your account.");
+      }
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      toast.error(error.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center p-6 relative overflow-hidden">

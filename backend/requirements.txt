@@ -1,0 +1,17 @@
+# ML Pipeline Dependencies
+pandas
+numpy
+scikit-learn
+xgboost
+imbalanced-learn
+joblib
+
+# FastAPI Backend Dependencies
+fastapi
+pydantic
+uvicorn
+python-multipart
+python-dotenv
+aiohttp
+supabase
+google-generativeai

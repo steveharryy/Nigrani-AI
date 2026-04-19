@@ -6,6 +6,7 @@ import { ShieldCheck, Mail, Lock, ArrowRight, Globe as GlobeIcon } from "lucide-
 import { Button } from "@/components/ui/Button";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function LoginPage() {
     password: ""
   });
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
       toast.error("Please fill in all fields");
@@ -23,13 +24,25 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    toast.loading("Authenticating with Nigrani Security Node...");
+    const loadingToast = toast.loading("Authenticating with Nigrani Security Node...");
 
-    setTimeout(() => {
-      toast.dismiss();
-      toast.success("Access Granted. Welcome back, Admin.");
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) throw error;
+
+      toast.dismiss(loadingToast);
+      toast.success("Access Granted. Welcome back.");
       router.push("/dashboard");
-    }, 2000);
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      toast.error(error.message || "Authentication failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center p-6 relative overflow-hidden">

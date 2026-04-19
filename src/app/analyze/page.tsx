@@ -15,14 +15,17 @@ import { toast } from "sonner";
 export default function AnalyzePage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [explanation, setExplanation] = useState<string>("");
   const [formData, setFormData] = useState({
     amount: "",
     location: "Mumbai, IN",
     device: "iPhone 15 Pro",
-    ip: "192.168.1.1"
+    ip: "192.168.1.1",
+    merchant_category: "Groceries",
+    is_new_device: false
   });
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!formData.amount) {
       toast.error("Please enter a transaction amount");
       return;
@@ -30,29 +33,59 @@ export default function AnalyzePage() {
 
     setAnalyzing(true);
     setResult(null);
+    setExplanation("");
     
-    setTimeout(() => {
-      const amountNum = parseInt(formData.amount.replace(/,/g, ''));
-      const isHighRisk = amountNum > 50000;
-      
-      setResult({
-        score: isHighRisk ? 92 : 12,
-        status: isHighRisk ? "Fraud" : "Safe",
-        explanation: isHighRisk 
-          ? `Transaction of ₹${formData.amount} flagged due to unusual high-value velocity from ${formData.location}. Behavior deviates from historical patterns.`
-          : `Transaction of ₹${formData.amount} from ${formData.location} verified against device signature ${formData.device}. No anomalies detected.`,
-        riskFactors: isHighRisk 
-          ? ["High Value", "Velocity Spike", "Location Jump"] 
-          : ["Verified Device", "Trusted IP", "Standard Amount"]
+    try {
+      // 1. Call Prediction API
+      const predictRes = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(formData.amount.replace(/,/g, '')),
+          timestamp: new Date().toISOString(),
+          location: formData.location,
+          device_type: formData.device,
+          merchant_category: formData.merchant_category,
+          is_new_device: formData.is_new_device
+        })
       });
-      setAnalyzing(false);
+
+      if (!predictRes.ok) throw new Error("Backend connection failed during prediction");
       
-      if (isHighRisk) {
-        toast.warning("High risk transaction detected!");
-      } else {
-        toast.success("Transaction verified as safe");
+      const predictData = await predictRes.json();
+      setResult(predictData);
+
+      // 2. Call Explanation API (immediately after)
+      const explainRes = await fetch("/api/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(formData.amount.replace(/,/g, '')),
+          risk_level: predictData.risk_level,
+          merchant_category: formData.merchant_category,
+          location: formData.location,
+          device_type: formData.device,
+          confidence_score: predictData.confidence_score
+        })
+      });
+
+      if (explainRes.ok) {
+        const explainData = await explainRes.json();
+        setExplanation(explainData.explanation);
       }
-    }, 2000);
+
+      if (predictData.risk_level === "high") {
+        toast.error("Security Alert: High-risk anomaly detected!");
+      } else {
+        toast.success("Transaction verified successfully.");
+      }
+
+    } catch (error) {
+      console.error(error);
+      toast.error("System connection error. Verify backend status.");
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handleFreeze = () => {
@@ -116,29 +149,33 @@ export default function AnalyzePage() {
 
                  <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-3">
-                       <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">device signature</label>
+                       <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">merchant category</label>
                        <div className="relative">
-                          <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
-                          <input 
-                              type="text" 
-                              value={formData.device}
-                              onChange={(e) => setFormData({...formData, device: e.target.value})}
-                              placeholder="iPhone 15 Pro" 
-                              className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 pl-12 pr-6 outline-none focus:border-[#00FF00]/30 transition-all text-sm uppercase tracking-tighter font-bold" 
-                           />
+                          <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
+                          <select 
+                              value={formData.merchant_category}
+                              onChange={(e) => setFormData({...formData, merchant_category: e.target.value})}
+                              className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 pl-12 pr-6 outline-none focus:border-[#00FF00]/30 transition-all text-sm font-bold appearance-none cursor-pointer"
+                           >
+                              {["Groceries", "Electronics", "Jewelry", "Gambling", "Transfer", "QR-Scan", "Food", "Entertainment"].map(cat => (
+                                <option key={cat} value={cat} className="bg-black text-white">{cat}</option>
+                              ))}
+                          </select>
                        </div>
                     </div>
                     <div className="space-y-3">
-                       <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">ip address</label>
-                       <div className="relative">
-                          <GlobeIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={16} />
-                          <input 
-                              type="text" 
-                              value={formData.ip}
-                              onChange={(e) => setFormData({...formData, ip: e.target.value})}
-                              placeholder="192.168.1.1" 
-                              className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 pl-12 pr-6 outline-none focus:border-[#00FF00]/30 transition-all font-mono text-sm" 
-                           />
+                       <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-1">security flags</label>
+                       <div 
+                          onClick={() => setFormData({...formData, is_new_device: !formData.is_new_device})}
+                          className="flex items-center space-x-4 bg-white/[0.03] border border-white/5 rounded-full py-4 px-6 cursor-pointer hover:border-white/10 transition-all"
+                       >
+                          <div className={cn(
+                            "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                            formData.is_new_device ? "bg-[#00FF00] border-[#00FF00]" : "border-white/20"
+                          )}>
+                            {formData.is_new_device && <Zap size={12} className="text-black" />}
+                          </div>
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">New Device / IP</span>
                        </div>
                     </div>
                  </div>
@@ -154,9 +191,9 @@ export default function AnalyzePage() {
            </div>
 
            {/* Right: Results / Status */}
-           <div className="col-span-12 md:col-span-5 flex flex-col gap-1">
+           <div className="col-span-12 md:col-span-5 flex flex-col gap-2">
               {!result && !analyzing ? (
-                <GlassCard className="h-[400px] flex flex-col items-center justify-center text-center space-y-6">
+                <GlassCard className="h-[520px] flex flex-col items-center justify-center text-center space-y-6">
                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
                       <Cpu size={32} className="text-gray-600" />
                    </div>
@@ -166,54 +203,84 @@ export default function AnalyzePage() {
                    </div>
                 </GlassCard>
               ) : analyzing ? (
-                <GlassCard className="h-[400px] flex flex-col items-center justify-center space-y-8">
+                <GlassCard className="h-[520px] flex flex-col items-center justify-center space-y-8">
                    <div className="relative">
                       <div className="w-24 h-24 border-2 border-[#00FF00]/20 rounded-full animate-spin border-t-[#00FF00]" />
                       <Cpu size={32} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#00FF00]" />
                    </div>
                    <div className="text-center space-y-2">
                       <p className="text-[10px] font-black text-[#00FF00] uppercase tracking-widest animate-pulse">scanning nodes</p>
-                      <p className="text-gray-500 text-[8px] font-bold uppercase tracking-widest">verifying behavior patterns...</p>
+                      <p className="text-gray-500 text-[8px] font-bold uppercase tracking-widest">verifying behavior patterns against gemini ai...</p>
                    </div>
                 </GlassCard>
               ) : (
                 <>
                    <GlassCard className={cn(
-                     "space-y-8 glow-neon",
-                     result.status === "Fraud" ? "border-red-500/30" : "border-[#00FF00]/30"
+                     "space-y-8 glow-neon transition-all duration-700",
+                     result.prediction === "fraud" || result.risk_level === "high" ? "border-red-500/50 shadow-[0_0_30px_-5px_rgba(239,68,68,0.3)]" : "border-[#00FF00]/50 shadow-[0_0_30px_-5px_rgba(0,255,0,0.3)]"
                    )}>
                       <div className="flex justify-between items-start">
                          <div className="space-y-1">
                             <p className={cn(
                               "text-[10px] font-black uppercase tracking-widest",
-                              result.status === "Fraud" ? "text-red-500" : "text-[#00FF00]"
-                            )}>{result.status === "Fraud" ? "high-risk detected" : "transaction verified"}</p>
-                            <h3 className="text-5xl font-bold font-heading tracking-tighter lowercase">{result.score}%</h3>
+                              result.risk_level === "high" ? "text-red-500" : "text-[#00FF00]"
+                            )}>{result.risk_level === "high" ? "anomaly detected" : "transaction verified"}</p>
+                            <h3 className="text-5xl font-bold font-heading tracking-tighter lowercase">{Math.round(result.confidence_score)}%</h3>
+                            <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest">confidence score</p>
                          </div>
-                         <StatusBadge status={result.status} />
+                         <StatusBadge status={result.prediction === "fraud" ? "Fraud" : "Safe"} />
                       </div>
                       
-                      <div className="space-y-4 pt-4 border-t border-white/5">
-                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">intelligence summary</p>
-                         <p className="text-sm font-bold uppercase tracking-tighter text-gray-300 leading-relaxed italic">
-                           "{result.explanation}"
-                         </p>
+                      <div className="grid grid-cols-2 gap-4 py-6 border-y border-white/5">
+                        <div className="space-y-1">
+                          <p className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Risk Level</p>
+                          <p className={cn(
+                            "text-xs font-bold uppercase tracking-tighter",
+                            result.risk_level === "high" ? "text-red-400" : "text-emerald-400"
+                          )}>{result.risk_level}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Probability</p>
+                          <p className="text-xs font-bold font-mono tracking-tighter text-gray-300">{(result.probability * 100).toFixed(2)}%</p>
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                         {result.riskFactors.map((f: string, i: number) => (
-                           <span key={i} className="text-[8px] font-black uppercase tracking-widest px-3 py-1 bg-white/5 border border-white/10 rounded-full">
-                             {f}
-                           </span>
-                         ))}
+                      <div className="space-y-3">
+                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                           <ShieldAlert size={12} className="text-[#00FF00]" /> signal summary
+                         </p>
+                         <p className="text-xs font-bold uppercase tracking-tighter text-gray-300 leading-relaxed italic">
+                           "{result.message}"
+                         </p>
+                      </div>
+                   </GlassCard>
+
+                   {/* NEW: AI Explanation Card */}
+                   <GlassCard className="bg-white/[0.02] border-white/5 space-y-4">
+                      <div className="flex items-center gap-2 text-[#00FF00]">
+                         <Cpu size={16} className="animate-pulse" />
+                         <p className="text-[10px] font-black uppercase tracking-widest">AI Intelligence Reasoning</p>
+                      </div>
+                      <div className="relative">
+                         {!explanation ? (
+                           <div className="space-y-2 py-2">
+                             <div className="h-2 w-full bg-white/5 rounded-full animate-pulse" />
+                             <div className="h-2 w-3/4 bg-white/5 rounded-full animate-pulse" />
+                             <div className="h-2 w-1/2 bg-white/5 rounded-full animate-pulse" />
+                           </div>
+                         ) : (
+                           <p className="text-sm font-medium text-gray-400 lowercase leading-relaxed">
+                             {explanation}
+                           </p>
+                         )}
                       </div>
                    </GlassCard>
 
                    <GlassCard 
                      onClick={handleFreeze}
                      className={cn(
-                       "bg-[#00FF00] text-black border-none mt-1 group cursor-pointer overflow-hidden transition-all active:scale-[0.98]",
-                       result.status === "Safe" && "opacity-50 pointer-events-none grayscale"
+                       "bg-[#00FF00] text-black border-none group cursor-pointer overflow-hidden transition-all active:scale-[0.98]",
+                       result.risk_level !== "high" && "opacity-50 pointer-events-none grayscale"
                      )}
                    >
                       <div className="flex justify-between items-center relative z-10">

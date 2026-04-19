@@ -1,23 +1,75 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Shield, User, Bell, Lock, Smartphone, Globe, Save } from "lucide-react";
+import { Shield, User, Bell, Lock, Smartphone, Globe, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState({
+    name: "",
+    org: "",
+    email: ""
+  });
 
-  const handleSave = () => {
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1500)),
-      {
-        loading: 'Syncing settings with cloud node...',
-        success: 'Settings updated successfully.',
-        error: 'Sync failed. Retry in 1m.',
-      }
-    );
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      setProfile({
+        name: data.name || "",
+        org: data.organization || "",
+        email: data.email || user.email || ""
+      });
+    } catch (error: any) {
+      console.error("Error fetching profile:", error.message);
+      toast.error("Failed to load profile data.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const loadingToast = toast.loading("Syncing settings with cloud node...");
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No authenticated user");
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name: profile.name,
+          organization: profile.org,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      toast.dismiss(loadingToast);
+      toast.success("Settings updated successfully.");
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      toast.error(error.message || "Update failed.");
+    }
   };
 
   const tabs = [
@@ -38,7 +90,8 @@ export default function SettingsPage() {
           </div>
           <button 
             onClick={handleSave}
-            className="flex items-center gap-2 px-8 py-4 bg-[#00FF00] text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#00FF00]/90 transition-all active:scale-95 glow-neon"
+            disabled={loading}
+            className="flex items-center gap-2 px-8 py-4 bg-[#00FF00] text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#00FF00]/90 transition-all active:scale-95 glow-neon disabled:opacity-50 disabled:pointer-events-none"
           >
             <Save size={16} /> Save Changes
           </button>
@@ -65,7 +118,14 @@ export default function SettingsPage() {
 
            {/* Content Area */}
            <div className="col-span-12 md:col-span-9">
-              <GlassCard className="min-h-[500px] space-y-12">
+              <GlassCard className="min-h-[500px] space-y-12 relative overflow-hidden">
+                 {loading && (
+                   <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center space-y-4">
+                      <Loader2 size={32} className="text-[#00FF00] animate-spin" />
+                      <p className="text-[10px] font-black text-[#00FF00] uppercase tracking-widest animate-pulse">Initializing node data...</p>
+                   </div>
+                 )}
+
                  <div className="space-y-2">
                     <p className="text-[10px] font-black text-[#00FF00] uppercase tracking-widest italic">{activeTab} configuration</p>
                     <h2 className="text-3xl font-bold font-heading tracking-tighter lowercase">edit {activeTab}</h2>
@@ -74,11 +134,33 @@ export default function SettingsPage() {
                  <div className="grid grid-cols-2 gap-12">
                     <div className="space-y-4">
                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">full identity</label>
-                       <input type="text" defaultValue="Admin User" className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 px-8 outline-none focus:border-[#00FF00]/30 transition-all text-sm font-bold uppercase tracking-tighter" />
+                       <input 
+                         type="text" 
+                         value={profile.name} 
+                         onChange={(e) => setProfile({...profile, name: e.target.value})}
+                         className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 px-8 outline-none focus:border-[#00FF00]/30 transition-all text-sm font-bold uppercase tracking-tighter" 
+                       />
                     </div>
                     <div className="space-y-4">
                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">system email</label>
-                       <input type="email" defaultValue="admin@nigrani.ai" className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 px-8 outline-none focus:border-[#00FF00]/30 transition-all text-sm font-bold tracking-tight lowercase" />
+                       <input 
+                         type="email" 
+                         value={profile.email} 
+                         disabled
+                         className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 px-8 outline-none text-gray-500 text-sm font-bold tracking-tight lowercase cursor-not-allowed" 
+                       />
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-12">
+                   <div className="space-y-4">
+                       <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">organization signature</label>
+                       <input 
+                         type="text" 
+                         value={profile.org} 
+                         onChange={(e) => setProfile({...profile, org: e.target.value})}
+                         className="w-full bg-white/[0.03] border border-white/5 rounded-full py-4 px-8 outline-none focus:border-[#00FF00]/30 transition-all text-sm font-bold uppercase tracking-tighter" 
+                       />
                     </div>
                  </div>
 
